@@ -1,7 +1,5 @@
 node_modules/
 ~$*
-*.SLDPRT
-*.STL
 package-lock.json
 package.json
 sim/
