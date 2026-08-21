@@ -418,8 +418,12 @@
       let planeX = xMin;
       let planeT = 0;
       let stacked = false;
-      // Vertical flange pitch (Y) — neighbors mesh top/bottom flanges
-      let pitch = box.getSize(new THREE.Vector3()).y;
+      // Vertical flange pitch (Y). Nest slightly so lips interlock instead of sitting flush.
+      const NEST = 2;
+      function stackPitch(b) {
+        return Math.max(0, b.getSize(new THREE.Vector3()).y - NEST);
+      }
+      let pitch = stackPitch(box);
 
       const clipPlanes = [new THREE.Plane(new THREE.Vector3(1, 0, 0), -planeX)];
 
@@ -606,7 +610,7 @@
       function setGeometry(newGeom, newBox) {
         geom = newGeom;
         baseBox = newBox.clone();
-        pitch = newBox.getSize(new THREE.Vector3()).y;
+        pitch = stackPitch(newBox);
         solidMesh.geometry = geom;
         aboveMesh.geometry = geom;
         belowMesh.geometry = geom;
