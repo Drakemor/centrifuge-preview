@@ -1,7 +1,9 @@
 # Centrifuge model preview
 
-Interactive Three.js viewer with perspective and midplane section views.
+Interactive Three.js viewer with a midplane section cut.
 
 Open [the live page](https://drakemor.github.io/centrifuge-preview/).
 
-Downloads: [STL](centrifuge.STL) · [SolidWorks part](centrifuge.SLDPRT)
+Use the **Version** dropdown to switch between Latest and Previous STL exports.
+
+Downloads: [Latest STL](versions/centrifuge-v2.STL) · [Previous STL](versions/centrifuge-v1.STL) · [SolidWorks part](centrifuge.SLDPRT)
