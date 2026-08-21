@@ -626,7 +626,10 @@
         xMin = newBox.min.x;
         xMax = newBox.max.x;
         syncStackTransforms();
-        fitToCurrent();
+        // Keep orbit camera; only refresh grid scale for the new bounds
+        const size = newBox.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        syncGrid(maxDim);
         setPlaneT(planeT);
 
         const w = container.clientWidth;
