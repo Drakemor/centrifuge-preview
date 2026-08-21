@@ -31,6 +31,11 @@
       padding: 0.35rem 0.55rem; cursor: pointer;
     }
     .version-pick select:hover { border-color: #5a6578; }
+    .stack-pick {
+      display: flex; align-items: center; gap: 0.4rem;
+      font-size: 0.8rem; color: var(--text); cursor: pointer; user-select: none;
+    }
+    .stack-pick input { accent-color: #ffdd22; width: 0.95rem; height: 0.95rem; cursor: pointer; }
     .downloads { display: flex; gap: 0.5rem; }
     .downloads a {
       font-size: 0.75rem; color: var(--text); text-decoration: none;
@@ -81,6 +86,10 @@
       <label class="version-pick">
         Version
         <select id="version-select" aria-label="Model version"></select>
+      </label>
+      <label class="stack-pick" title="Show neighbors meshed on the flanges">
+        <input type="checkbox" id="stack-toggle" />
+        Stack
       </label>
       <div class="downloads">
         <a id="download-stl" href="versions/centrifuge-v2.STL" download="centrifuge.STL">Download STL</a>
@@ -399,10 +408,14 @@
       makeLights(scene);
 
       let geom = geometry;
+      let baseBox = box.clone();
       let xMin = box.min.x;
       let xMax = box.max.x;
       let planeX = xMin;
       let planeT = 0;
+      let stacked = false;
+      // Vertical flange pitch (Y) — neighbors mesh top/bottom flanges
+      let pitch = box.getSize(new THREE.Vector3()).y;
 
       const clipPlanes = [new THREE.Plane(new THREE.Vector3(1, 0, 0), -planeX)];
 
@@ -413,66 +426,148 @@
         side: THREE.DoubleSide,
         clippingPlanes: clipPlanes,
       });
+      const matNeighbor = matSolid.clone();
+      matNeighbor.color = new THREE.Color(0x9aa3b0);
+      matNeighbor.transparent = true;
+      matNeighbor.opacity = 0.92;
+
       const solidMesh = new THREE.Mesh(geom, matSolid);
       scene.add(solidMesh);
+
+      const aboveMesh = new THREE.Mesh(geom, matNeighbor);
+      const belowMesh = new THREE.Mesh(geom, matNeighbor);
+      aboveMesh.visible = false;
+      belowMesh.visible = false;
+      scene.add(aboveMesh);
+      scene.add(belowMesh);
 
       let edge = makeEdges(geom, { clippingPlanes: clipPlanes });
       scene.add(edge.lines);
 
-      const lineMats = [edge.mat];
+      let edgeAbove = makeEdges(geom, { color: 0x2a3140, linewidth: 1.75, clippingPlanes: clipPlanes });
+      let edgeBelow = makeEdges(geom, { color: 0x2a3140, linewidth: 1.75, clippingPlanes: clipPlanes });
+      edgeAbove.lines.visible = false;
+      edgeBelow.lines.visible = false;
+      scene.add(edgeAbove.lines);
+      scene.add(edgeBelow.lines);
+
+      const lineMats = [edge.mat, edgeAbove.mat, edgeBelow.mat];
       let grid = null;
-      let capMesh = null;
-      let capEdgeLines = null;
-      let capEdgeMat = null;
+
+      // Cap instances: center, above, below
+      const caps = [
+        { mesh: null, edgeLines: null, edgeMat: null, y: 0 },
+        { mesh: null, edgeLines: null, edgeMat: null, y: 0 },
+        { mesh: null, edgeLines: null, edgeMat: null, y: 0 },
+      ];
+
+      function viewBox() {
+        const b = baseBox.clone();
+        if (stacked) {
+          b.min.y -= pitch;
+          b.max.y += pitch;
+        }
+        return b;
+      }
 
       function syncGrid(maxDim) {
         if (grid) {
           scene.remove(grid);
           grid.geometry?.dispose?.();
-          grid.material?.dispose?.();
+          if (Array.isArray(grid.material)) grid.material.forEach((m) => m.dispose?.());
+          else grid.material?.dispose?.();
         }
         grid = makeGrid(maxDim);
         scene.add(grid);
       }
 
-      function disposeCap() {
-        if (capMesh) {
-          scene.remove(capMesh);
-          capMesh.geometry.dispose();
-          capMesh.material.dispose();
-          capMesh = null;
+      function fitToCurrent() {
+        const { maxDim } = fitCamera(camera, controls, viewBox(), new THREE.Vector3(-1, 1, 0));
+        syncGrid(maxDim);
+      }
+
+      function syncStackTransforms() {
+        aboveMesh.position.set(0, pitch, 0);
+        belowMesh.position.set(0, -pitch, 0);
+        edgeAbove.lines.position.set(0, pitch, 0);
+        edgeBelow.lines.position.set(0, -pitch, 0);
+        caps[0].y = 0;
+        caps[1].y = pitch;
+        caps[2].y = -pitch;
+        for (const c of caps) {
+          if (c.mesh) c.mesh.position.y = c.y;
+          if (c.edgeLines) c.edgeLines.position.y = c.y;
         }
-        if (capEdgeLines) {
-          scene.remove(capEdgeLines);
-          capEdgeLines.geometry.dispose();
-          if (capEdgeMat) {
-            const i = lineMats.indexOf(capEdgeMat);
+      }
+
+      function disposeOneCap(c) {
+        if (c.mesh) {
+          scene.remove(c.mesh);
+          c.mesh.geometry.dispose();
+          c.mesh.material.dispose();
+          c.mesh = null;
+        }
+        if (c.edgeLines) {
+          scene.remove(c.edgeLines);
+          c.edgeLines.geometry.dispose();
+          if (c.edgeMat) {
+            const i = lineMats.indexOf(c.edgeMat);
             if (i >= 0) lineMats.splice(i, 1);
-            capEdgeMat.dispose();
-            capEdgeMat = null;
+            c.edgeMat.dispose();
+            c.edgeMat = null;
           }
-          capEdgeLines = null;
+          c.edgeLines = null;
         }
+      }
+
+      function disposeCap() {
+        for (const c of caps) disposeOneCap(c);
       }
 
       function rebuildCap() {
         disposeCap();
-        const cap = buildSectionCap(geom, planeX, SECTION_FILL);
-        if (!cap) return;
-        capMesh = cap;
-        scene.add(capMesh);
-        const capEdge = makeEdges(cap.geometry, {
-          color: SECTION_EDGE,
-          linewidth: 2.75,
-          threshold: 1,
-        });
-        capEdgeLines = capEdge.lines;
-        capEdgeMat = capEdge.mat;
-        scene.add(capEdgeLines);
-        lineMats.push(capEdgeMat);
-        const w = container.clientWidth;
-        const h = container.clientHeight;
-        if (w && h) capEdgeMat.resolution.set(w, h);
+        const baseCap = buildSectionCap(geom, planeX, SECTION_FILL);
+        if (!baseCap) return;
+
+        const slots = stacked ? [0, 1, 2] : [0];
+        const ys = [0, pitch, -pitch];
+        for (const i of slots) {
+          const c = caps[i];
+          c.y = ys[i];
+          const geo = i === 0 ? baseCap.geometry : baseCap.geometry.clone();
+          const mat = i === 0
+            ? baseCap.material
+            : baseCap.material.clone();
+          if (i !== 0) {
+            // Neighbors: slightly softer yellow fill
+            mat.color = new THREE.Color(0xe6c61a);
+          }
+          c.mesh = new THREE.Mesh(geo, mat);
+          c.mesh.position.y = c.y;
+          scene.add(c.mesh);
+
+          const capEdge = makeEdges(geo, {
+            color: SECTION_EDGE,
+            linewidth: i === 0 ? 2.75 : 2.0,
+            threshold: 1,
+          });
+          c.edgeLines = capEdge.lines;
+          c.edgeMat = capEdge.mat;
+          c.edgeLines.position.y = c.y;
+          scene.add(c.edgeLines);
+          lineMats.push(c.edgeMat);
+          const w = container.clientWidth;
+          const h = container.clientHeight;
+          if (w && h) c.edgeMat.resolution.set(w, h);
+        }
+
+        // baseCap.mesh wrapper not added; dispose unused shell if we used its geometry
+        if (!slots.includes(0)) {
+          baseCap.geometry.dispose();
+          baseCap.material.dispose();
+        } else {
+          // material/geometry owned by caps[0]
+        }
       }
 
       function setPlaneT(t) {
@@ -483,34 +578,63 @@
         return planeX;
       }
 
+      function replaceEdges(target, color, linewidth) {
+        scene.remove(target.lines);
+        target.lines.geometry.dispose();
+        const ei = lineMats.indexOf(target.mat);
+        if (ei >= 0) lineMats.splice(ei, 1);
+        target.mat.dispose();
+        const next = makeEdges(geom, { color, linewidth, clippingPlanes: clipPlanes });
+        scene.add(next.lines);
+        lineMats.push(next.mat);
+        return next;
+      }
+
       function setGeometry(newGeom, newBox) {
         geom = newGeom;
+        baseBox = newBox.clone();
+        pitch = newBox.getSize(new THREE.Vector3()).y;
         solidMesh.geometry = geom;
+        aboveMesh.geometry = geom;
+        belowMesh.geometry = geom;
 
-        scene.remove(edge.lines);
-        edge.lines.geometry.dispose();
-        const ei = lineMats.indexOf(edge.mat);
-        if (ei >= 0) lineMats.splice(ei, 1);
-        edge.mat.dispose();
-
-        edge = makeEdges(geom, { clippingPlanes: clipPlanes });
-        scene.add(edge.lines);
-        lineMats.unshift(edge.mat);
+        edge = replaceEdges(edge, EDGE_COLOR, 2.25);
+        edgeAbove = replaceEdges(edgeAbove, 0x2a3140, 1.75);
+        edgeBelow = replaceEdges(edgeBelow, 0x2a3140, 1.75);
+        aboveMesh.visible = stacked;
+        belowMesh.visible = stacked;
+        edgeAbove.lines.visible = stacked;
+        edgeBelow.lines.visible = stacked;
 
         xMin = newBox.min.x;
         xMax = newBox.max.x;
-        const { maxDim } = fitCamera(camera, controls, newBox, new THREE.Vector3(-1, 1, 0));
-        syncGrid(maxDim);
+        syncStackTransforms();
+        fitToCurrent();
         setPlaneT(planeT);
 
         const w = container.clientWidth;
         const h = container.clientHeight;
-        if (w && h) edge.mat.resolution.set(w, h);
+        if (w && h) {
+          edge.mat.resolution.set(w, h);
+          edgeAbove.mat.resolution.set(w, h);
+          edgeBelow.mat.resolution.set(w, h);
+        }
+      }
+
+      function setStacked(on) {
+        stacked = !!on;
+        aboveMesh.visible = stacked;
+        belowMesh.visible = stacked;
+        edgeAbove.lines.visible = stacked;
+        edgeBelow.lines.visible = stacked;
+        syncStackTransforms();
+        fitToCurrent();
+        rebuildCap();
       }
 
       {
-        const { maxDim } = fitCamera(camera, controls, box, new THREE.Vector3(-1, 1, 0));
-        syncGrid(maxDim);
+        syncStackTransforms();
+        fitToCurrent();
         setPlaneT(0);
       }
 
@@ -520,6 +644,7 @@
         lineMats,
         setPlaneT,
         setGeometry,
+        setStacked,
         getPlaneT: () => planeT,
       };
     }
@@ -622,6 +747,12 @@
         box
       );
       const cutBar = bindCutBar(() => section);
+
+      const stackToggle = document.getElementById('stack-toggle');
+      stackToggle.addEventListener('change', () => {
+        section.setStacked(stackToggle.checked);
+        resizeView(section);
+      });
 
       status.classList.add('hidden');
 
