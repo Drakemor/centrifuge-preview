@@ -645,7 +645,7 @@
         edgeAbove.lines.visible = stacked;
         edgeBelow.lines.visible = stacked;
         syncStackTransforms();
-        fitToCurrent();
+        // Keep camera/framing on the middle model — don't refit
         rebuildCap();
       }
 
