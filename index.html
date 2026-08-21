@@ -133,6 +133,10 @@
     const EDGE_COLOR = 0x111318;
     const SECTION_FILL = 0xffdd22;
     const SECTION_EDGE = 0x8a6a00;
+    const SECTION_FILL_ABOVE = 0xff7a1a; // orange
+    const SECTION_EDGE_ABOVE = 0x8a3a08;
+    const SECTION_FILL_BELOW = 0x3dbbff; // sky
+    const SECTION_EDGE_BELOW = 0x0a4a6a;
 
     // Latest first — default selection
     const VERSIONS = [
@@ -426,16 +430,19 @@
         side: THREE.DoubleSide,
         clippingPlanes: clipPlanes,
       });
-      const matNeighbor = matSolid.clone();
-      matNeighbor.color = new THREE.Color(0x9aa3b0);
-      matNeighbor.transparent = true;
-      matNeighbor.opacity = 0.92;
+      // Must share the same Plane refs so the cut slider updates all instances
+      const matAbove = matSolid.clone();
+      matAbove.clippingPlanes = clipPlanes;
+      matAbove.color = new THREE.Color(0xa8b0bc);
+      const matBelow = matSolid.clone();
+      matBelow.clippingPlanes = clipPlanes;
+      matBelow.color = new THREE.Color(0x8e97a4);
 
       const solidMesh = new THREE.Mesh(geom, matSolid);
       scene.add(solidMesh);
 
-      const aboveMesh = new THREE.Mesh(geom, matNeighbor);
-      const belowMesh = new THREE.Mesh(geom, matNeighbor);
+      const aboveMesh = new THREE.Mesh(geom, matAbove);
+      const belowMesh = new THREE.Mesh(geom, matBelow);
       aboveMesh.visible = false;
       belowMesh.visible = false;
       scene.add(aboveMesh);
@@ -454,7 +461,12 @@
       const lineMats = [edge.mat, edgeAbove.mat, edgeBelow.mat];
       let grid = null;
 
-      // Cap instances: center, above, below
+      // Cap instances: center, above, below — distinct fill colors
+      const CAP_STYLE = [
+        { fill: SECTION_FILL, edge: SECTION_EDGE, linewidth: 2.75 },
+        { fill: SECTION_FILL_ABOVE, edge: SECTION_EDGE_ABOVE, linewidth: 2.25 },
+        { fill: SECTION_FILL_BELOW, edge: SECTION_EDGE_BELOW, linewidth: 2.25 },
+      ];
       const caps = [
         { mesh: null, edgeLines: null, edgeMat: null, y: 0 },
         { mesh: null, edgeLines: null, edgeMat: null, y: 0 },
@@ -533,27 +545,30 @@
         const ys = [0, pitch, -pitch];
         for (const i of slots) {
           const c = caps[i];
+          const style = CAP_STYLE[i];
           c.y = ys[i];
           const geo = i === 0 ? baseCap.geometry : baseCap.geometry.clone();
-          const mat = i === 0
-            ? baseCap.material
-            : baseCap.material.clone();
-          if (i !== 0) {
-            // Neighbors: slightly softer yellow fill
-            mat.color = new THREE.Color(0xe6c61a);
-          }
+          const mat = new THREE.MeshBasicMaterial({
+            color: style.fill,
+            side: THREE.DoubleSide,
+            polygonOffset: true,
+            polygonOffsetFactor: -2,
+            polygonOffsetUnits: -2,
+          });
           c.mesh = new THREE.Mesh(geo, mat);
           c.mesh.position.y = c.y;
+          c.mesh.renderOrder = 4;
           scene.add(c.mesh);
 
           const capEdge = makeEdges(geo, {
-            color: SECTION_EDGE,
-            linewidth: i === 0 ? 2.75 : 2.0,
+            color: style.edge,
+            linewidth: style.linewidth,
             threshold: 1,
           });
           c.edgeLines = capEdge.lines;
           c.edgeMat = capEdge.mat;
           c.edgeLines.position.y = c.y;
+          c.edgeLines.renderOrder = 5;
           scene.add(c.edgeLines);
           lineMats.push(c.edgeMat);
           const w = container.clientWidth;
@@ -561,13 +576,11 @@
           if (w && h) c.edgeMat.resolution.set(w, h);
         }
 
-        // baseCap.mesh wrapper not added; dispose unused shell if we used its geometry
-        if (!slots.includes(0)) {
+        // Drop the temporary mesh shell; geometry reused/cloned above
+        if (slots[0] !== 0) {
           baseCap.geometry.dispose();
-          baseCap.material.dispose();
-        } else {
-          // material/geometry owned by caps[0]
         }
+        baseCap.material.dispose();
       }
 
       function setPlaneT(t) {
