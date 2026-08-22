@@ -92,7 +92,7 @@
         Stack
       </label>
       <div class="downloads">
-        <a id="download-stl" href="versions/centrifuge-v2.STL" download="centrifuge.STL">Download STL</a>
+        <a id="download-stl" href="versions/centrifuge-0.1.0.STL" download="centrifuge-0.1.0.STL">Download STL</a>
         <a href="centrifuge.SLDPRT" download>Download SolidWorks</a>
       </div>
       <p>Drag to orbit · scroll to zoom · right-drag to pan</p>
@@ -138,25 +138,31 @@
     const SECTION_FILL_BELOW = 0x3dbbff; // sky
     const SECTION_EDGE_BELOW = 0x0a4a6a;
 
-    // Latest first — default selection
+    // Semver model versions — latest first (default)
     const VERSIONS = [
       {
-        id: 'v2',
-        label: 'Latest',
-        url: 'versions/centrifuge-v2.STL',
-        downloadName: 'centrifuge-latest.STL',
+        id: '0.1.0',
+        label: '0.1.0',
+        url: 'versions/centrifuge-0.1.0.STL',
+        downloadName: 'centrifuge-0.1.0.STL',
       },
       {
-        id: 'v1',
-        label: 'Previous',
-        url: 'versions/centrifuge-v1.STL',
-        downloadName: 'centrifuge-previous.STL',
+        id: '0.0.3',
+        label: '0.0.3',
+        url: 'versions/centrifuge-0.0.3.STL',
+        downloadName: 'centrifuge-0.0.3.STL',
       },
       {
-        id: 'v0',
-        label: 'Archival',
-        url: 'versions/centrifuge-v0.STL',
-        downloadName: 'centrifuge-archival.STL',
+        id: '0.0.2',
+        label: '0.0.2',
+        url: 'versions/centrifuge-0.0.2.STL',
+        downloadName: 'centrifuge-0.0.2.STL',
+      },
+      {
+        id: '0.0.1',
+        label: '0.0.1',
+        url: 'versions/centrifuge-0.0.1.STL',
+        downloadName: 'centrifuge-0.0.1.STL',
       },
     ];
 
