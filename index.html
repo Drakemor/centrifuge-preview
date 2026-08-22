@@ -144,22 +144,6 @@
       return v.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
     }
 
-    function boxAfterSliceRotation(box) {
-      const out = new THREE.Box3();
-      const corners = [
-        new THREE.Vector3(box.min.x, box.min.y, box.min.z),
-        new THREE.Vector3(box.min.x, box.min.y, box.max.z),
-        new THREE.Vector3(box.min.x, box.max.y, box.min.z),
-        new THREE.Vector3(box.min.x, box.max.y, box.max.z),
-        new THREE.Vector3(box.max.x, box.min.y, box.min.z),
-        new THREE.Vector3(box.max.x, box.min.y, box.max.z),
-        new THREE.Vector3(box.max.x, box.max.y, box.min.z),
-        new THREE.Vector3(box.max.x, box.max.y, box.max.z),
-      ];
-      for (const c of corners) out.expandByPoint(rotateY(c));
-      return out;
-    }
-
     function sliceEyeDir() {
       return rotateY(new THREE.Vector3(-1, 1, 0));
     }
@@ -197,6 +181,7 @@
       const geometry = await loader.loadAsync(url);
       geometry.computeVertexNormals();
       geometry.center();
+      geometry.rotateY(SLICE_Y);
       geometry.computeBoundingBox();
       return geometry;
     }
@@ -443,10 +428,6 @@
 
       makeLights(scene);
 
-      const modelRoot = new THREE.Group();
-      modelRoot.rotation.y = SLICE_Y;
-      scene.add(modelRoot);
-
       let geom = geometry;
       let baseBox = box.clone();
       let xMin = box.min.x;
@@ -479,24 +460,24 @@
       matBelow.color = new THREE.Color(0x8e97a4);
 
       const solidMesh = new THREE.Mesh(geom, matSolid);
-      modelRoot.add(solidMesh);
+      scene.add(solidMesh);
 
       const aboveMesh = new THREE.Mesh(geom, matAbove);
       const belowMesh = new THREE.Mesh(geom, matBelow);
       aboveMesh.visible = false;
       belowMesh.visible = false;
-      modelRoot.add(aboveMesh);
-      modelRoot.add(belowMesh);
+      scene.add(aboveMesh);
+      scene.add(belowMesh);
 
       let edge = makeEdges(geom, { clippingPlanes: clipPlanes });
-      modelRoot.add(edge.lines);
+      scene.add(edge.lines);
 
       let edgeAbove = makeEdges(geom, { color: 0x2a3140, linewidth: 1.75, clippingPlanes: clipPlanes });
       let edgeBelow = makeEdges(geom, { color: 0x2a3140, linewidth: 1.75, clippingPlanes: clipPlanes });
       edgeAbove.lines.visible = false;
       edgeBelow.lines.visible = false;
-      modelRoot.add(edgeAbove.lines);
-      modelRoot.add(edgeBelow.lines);
+      scene.add(edgeAbove.lines);
+      scene.add(edgeBelow.lines);
 
       const lineMats = [edge.mat, edgeAbove.mat, edgeBelow.mat];
       let grid = null;
@@ -519,7 +500,7 @@
           b.min.y -= pitch;
           b.max.y += pitch;
         }
-        return boxAfterSliceRotation(b);
+        return b;
       }
 
       function syncGrid(maxDim) {
@@ -557,13 +538,13 @@
 
       function disposeOneCap(c) {
         if (c.mesh) {
-          modelRoot.remove(c.mesh);
+          scene.remove(c.mesh);
           c.mesh.geometry.dispose();
           c.mesh.material.dispose();
           c.mesh = null;
         }
         if (c.edgeLines) {
-          modelRoot.remove(c.edgeLines);
+          scene.remove(c.edgeLines);
           c.edgeLines.geometry.dispose();
           if (c.edgeMat) {
             const i = lineMats.indexOf(c.edgeMat);
@@ -601,7 +582,7 @@
           c.mesh = new THREE.Mesh(geo, mat);
           c.mesh.position.y = c.y;
           c.mesh.renderOrder = 4;
-          modelRoot.add(c.mesh);
+          scene.add(c.mesh);
 
           const capEdge = makeEdges(geo, {
             color: style.edge,
@@ -612,7 +593,7 @@
           c.edgeMat = capEdge.mat;
           c.edgeLines.position.y = c.y;
           c.edgeLines.renderOrder = 5;
-          modelRoot.add(c.edgeLines);
+          scene.add(c.edgeLines);
           lineMats.push(c.edgeMat);
           const w = container.clientWidth;
           const h = container.clientHeight;
@@ -635,13 +616,13 @@
       }
 
       function replaceEdges(target, color, linewidth) {
-        modelRoot.remove(target.lines);
+        scene.remove(target.lines);
         target.lines.geometry.dispose();
         const ei = lineMats.indexOf(target.mat);
         if (ei >= 0) lineMats.splice(ei, 1);
         target.mat.dispose();
         const next = makeEdges(geom, { color, linewidth, clippingPlanes: clipPlanes });
-        modelRoot.add(next.lines);
+        scene.add(next.lines);
         lineMats.push(next.mat);
         return next;
       }
