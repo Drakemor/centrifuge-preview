@@ -145,7 +145,7 @@
     }
 
     function sliceEyeDir() {
-      return rotateY(new THREE.Vector3(-1, 1, 0));
+      return rotateY(new THREE.Vector3(-1, 1, 0), -SLICE_Y);
     }
 
     // Semver model versions — latest first (default)
@@ -181,7 +181,7 @@
       const geometry = await loader.loadAsync(url);
       geometry.computeVertexNormals();
       geometry.center();
-      geometry.rotateY(SLICE_Y);
+      geometry.rotateY(-SLICE_Y);
       geometry.computeBoundingBox();
       return geometry;
     }
